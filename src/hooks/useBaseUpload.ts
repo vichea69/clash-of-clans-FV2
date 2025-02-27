@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { baseApi } from '@/api/baseApi';
-import type { CreateBaseInput } from '@/api/baseApi';
+
 
 export interface BaseFormData {
   name: string;
@@ -23,13 +23,14 @@ export const useBaseUpload = () => {
     setIsLoading(true);
 
     try {
-      const baseData: CreateBaseInput = {
-        name: formData.name,
-        link: formData.link,
-        image: formData.image,
-      };
+      const submitData = new FormData();
+      submitData.append('name', formData.name);
+      submitData.append('link', formData.link);
+      if (formData.image) {
+        submitData.append('image', formData.image);
+      }
 
-      const response = await baseApi.createBase(baseData);
+      const response = await baseApi.createBase(submitData);
 
       if (response.success) {
         toast.success("Base uploaded successfully");

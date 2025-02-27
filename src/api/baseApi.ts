@@ -40,19 +40,16 @@ const api = axios.create({
 // API functions
 export const baseApi = {
   // Create a new base
-  async createBase(data: CreateBaseInput) {
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('link', data.link);
-    if (data.image) {
-      formData.append('image', data.image);
-    }
-
-    const response = await api.post<{ success: boolean; data: Base }>('/bases', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+  async createBase(formData: FormData) {
+    const response = await api.post<{ success: boolean; data: Base; message?: string }>(
+      '/bases',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
     return response.data;
   },
 

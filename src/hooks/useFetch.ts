@@ -2,11 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 // Define a generic response type to handle common API response patterns
-interface ApiResponse<T> {
-    data?: T;
-    results?: T;
-    [key: string]: any;
-}
+
 
 export interface FetchState<T> {
     data: T | null;
@@ -21,7 +17,7 @@ export interface FetchOptions {
 }
 
 export function useFetch<T>(url: string, options: FetchOptions = {}) {
-    const { isAuthenticated, getToken } = useAuth();
+    const { isAuthenticated, } = useAuth();
     const [state, setState] = useState<FetchState<T>>({
         data: null,
         loading: false,
@@ -49,10 +45,8 @@ export function useFetch<T>(url: string, options: FetchOptions = {}) {
             };
 
             // Add auth token if available
-            const token = await getToken?.();
-            if (token) {
-                headers.Authorization = `Bearer ${token}`;
-            }
+
+
 
             const response = await fetch(url, { headers });
 
@@ -73,7 +67,7 @@ export function useFetch<T>(url: string, options: FetchOptions = {}) {
                 error: error instanceof Error ? error : new Error('An error occurred'),
             });
         }
-    }, [url, options.requireAuth, isAuthenticated, getToken, options.headers]);
+    }, [url, options.requireAuth, isAuthenticated, options.headers]);
 
     // Initial fetch if immediate is not false
     useEffect(() => {
