@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { useAuth } from '@clerk/clerk-react';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
-import { updatePublicBase, deletePublicBase } from '@/api/baseApi';
+import { baseApi } from '@/api/baseApi';
 
 export const useBaseActions = (baseId?: string) => {
-    const { getToken, isSignedIn } = useAuth();
+    const { isAuthenticated } = useAuth();
     const [isLoading, setIsLoading] = useState(false);
 
     const updateBase = async (formData: FormData) => {
-        if (!isSignedIn) {
+        if (!isAuthenticated) {
             toast.error("You must be signed in to update a base");
             return false;
         }
@@ -21,16 +21,12 @@ export const useBaseActions = (baseId?: string) => {
         setIsLoading(true);
 
         try {
-            const token = await getToken();
+            const response = await baseApi.updateBase(Number(baseId), {
+                name: formData.get('name') as string,
+                link: formData.get('link') as string,
+                image: formData.get('image') as File | undefined,
+            });
 
-            if (!token) {
-                toast.error("Authentication failed. Please sign in again.");
-                return false;
-            }
-
-            localStorage.setItem('backendToken', token as string);
-
-            const response = await updatePublicBase(baseId, formData);
             if (response.success) {
                 toast.success("Base updated successfully");
                 return true;
@@ -40,9 +36,7 @@ export const useBaseActions = (baseId?: string) => {
             }
         } catch (error) {
             console.error("Error updating base:", error);
-            toast.error(
-                error instanceof Error ? error.message : "Failed to update base"
-            );
+            toast.error(error instanceof Error ? error.message : "Failed to update base");
             return false;
         } finally {
             setIsLoading(false);
@@ -50,7 +44,7 @@ export const useBaseActions = (baseId?: string) => {
     };
 
     const deleteBase = async () => {
-        if (!isSignedIn) {
+        if (!isAuthenticated) {
             toast.error("You must be signed in to delete a base");
             return false;
         }
@@ -63,23 +57,15 @@ export const useBaseActions = (baseId?: string) => {
         setIsLoading(true);
 
         try {
-            const token = await getToken();
-
-            if (!token) {
-                toast.error("Authentication failed. Please sign in again.");
-                return false;
+            const response = await baseApi.deleteBase(Number(baseId));
+            if (response.success) {
+                toast.success("Base deleted successfully");
+                return true;
             }
-
-            localStorage.setItem('backendToken', token as string);
-
-            await deletePublicBase(baseId);
-            toast.success("Base deleted successfully");
-            return true;
+            return false;
         } catch (error) {
             console.error("Error deleting base:", error);
-            toast.error(
-                error instanceof Error ? error.message : "Failed to delete base"
-            );
+            toast.error(error instanceof Error ? error.message : "Failed to delete base");
             return false;
         } finally {
             setIsLoading(false);

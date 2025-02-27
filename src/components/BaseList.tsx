@@ -2,8 +2,8 @@ import { Copy, MoreVertical, Pencil, Trash } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Avatar from "@radix-ui/react-avatar";
 import { useEffect, useState, useCallback, memo } from "react";
-import { fetchBases } from "@/api/baseApi";
-import { useUser } from "@clerk/clerk-react";
+import { baseApi, Base as BaseType } from "@/api/baseApi";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { useBaseActions } from "@/hooks/useBaseActions";
@@ -19,23 +19,10 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-// Define proper interface based on BaseList.tsx
-interface Base {
-  id: number;
-  name: string;
-  imageUrl: string;
-  link: string;
-  user: {
-    name: string;
-    avatar?: string;
-  };
-  clerkUserId?: string;
-}
-
 // Base card component
 const BaseCard = memo(
-  ({ base, onBaseChange }: { base: Base; onBaseChange?: () => void }) => {
-    const { user, isSignedIn } = useUser();
+  ({ base, onBaseChange }: { base: BaseType; onBaseChange?: () => void }) => {
+    const { user, isAuthenticated } = useAuth();
     const navigate = useNavigate();
     const { deleteBase } = useBaseActions(base.id.toString());
 
@@ -47,18 +34,19 @@ const BaseCard = memo(
       });
     }, [base.link]);
 
-    const isCreator = isSignedIn && user?.id === base.clerkUserId;
+    // Check if current user is the creator
+    const isCreator = isAuthenticated && user?.id === base.userId;
 
-    const handleEdit = () => {
+    const handleEdit = useCallback(() => {
       navigate(`/bases/${base.id}/edit`);
-    };
+    }, [navigate, base.id]);
 
-    const handleDelete = async () => {
+    const handleDelete = useCallback(async () => {
       const success = await deleteBase();
       if (success && onBaseChange) {
         onBaseChange();
       }
-    };
+    }, [deleteBase, onBaseChange]);
 
     return (
       <div className="group relative rounded-lg border overflow-hidden transition-all duration-200 hover:shadow-md">
@@ -182,10 +170,7 @@ const BaseCard = memo(
                   {base.name}
                 </span>
                 <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
-                  by{" "}
-                  {isSignedIn && isCreator
-                    ? user?.username || user?.firstName || "You"
-                    : base.user?.name || "Unknown user"}
+                  by {isCreator ? "You" : base.user?.name || "Unknown user"}
                 </span>
               </div>
             </div>
@@ -196,8 +181,10 @@ const BaseCard = memo(
   }
 );
 
+BaseCard.displayName = "BaseCard";
+
 // Skeleton loader component
-const SkeletonCard = () => (
+const SkeletonCard = memo(() => (
   <div className="rounded-lg border overflow-hidden animate-pulse">
     <div className="aspect-square bg-gray-200"></div>
     <div className="p-3 sm:p-4">
@@ -210,49 +197,40 @@ const SkeletonCard = () => (
       </div>
     </div>
   </div>
-);
+));
+
+SkeletonCard.displayName = "SkeletonCard";
 
 const BaseList = () => {
-  const [bases, setBases] = useState<Base[]>([]);
+  const [bases, setBases] = useState<BaseType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [retryCount, setRetryCount] = useState(0);
 
-  useEffect(() => {
-    const loadBases = async () => {
-      try {
-        setLoading(true);
-        const basesData = await fetchBases();
-
-        if (Array.isArray(basesData)) {
-          setBases(basesData);
-        } else {
-          setError(
-            "Expected an array of bases but received a different format"
-          );
-          console.error("Unexpected data format:", basesData);
-        }
-      } catch (err) {
-        console.error("Error loading bases:", err);
-        setError("Failed to load bases. Please try again later.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadBases();
-  }, [retryCount]);
-
-  const handleRetry = useCallback(() => {
-    setRetryCount((count) => count + 1);
+  const loadBases = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await baseApi.getBases();
+      setBases(response.data);
+    } catch (err) {
+      console.error("Error loading bases:", err);
+      setError("Failed to load bases. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadBases();
+  }, [loadBases]);
 
   return (
     <div className="min-h-screen bg-background">
       <main className="container py-4 px-4 sm:px-6 sm:py-6">
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {[...Array(4)].map((_, i) => (
+            {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>
@@ -260,7 +238,7 @@ const BaseList = () => {
           <div className="p-4 sm:p-8 text-center rounded-lg border border-red-200 bg-red-50 text-red-500">
             <p className="font-medium mb-2">{error}</p>
             <button
-              onClick={handleRetry}
+              onClick={loadBases}
               className="mt-2 px-5 py-3 bg-red-100 hover:bg-red-200 active:bg-red-300
                 rounded-md text-sm font-medium transition-colors"
             >
@@ -274,7 +252,7 @@ const BaseList = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
             {bases.map((base) => (
-              <BaseCard key={base.id} base={base} onBaseChange={handleRetry} />
+              <BaseCard key={base.id} base={base} onBaseChange={loadBases} />
             ))}
           </div>
         )}

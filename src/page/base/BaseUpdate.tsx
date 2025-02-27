@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { useBaseActions } from "@/hooks/useBaseActions";
+import { baseApi, Base } from "@/api/baseApi";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,25 +21,19 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import type { BaseFormData } from "@/types/base";
-import { fetchBaseById } from "@/api/baseApi";
-import { toast } from "sonner";
 
-interface BaseData extends BaseFormData {
+interface FormData {
+  name: string;
+  link: string;
+  image: File | null;
   imageUrl?: string;
-  user?: {
-    id: string;
-    name: string;
-    imageUrl: string;
-    email: string;
-  };
 }
 
 const BaseUpdate = () => {
   const { baseId } = useParams();
   const navigate = useNavigate();
   const { updateBase, deleteBase, isLoading } = useBaseActions(baseId);
-  const [formData, setFormData] = useState<BaseData>({
+  const [formData, setFormData] = useState<FormData>({
     name: "",
     link: "",
     image: null,
@@ -50,32 +46,30 @@ const BaseUpdate = () => {
   useEffect(() => {
     const fetchBase = async () => {
       if (!baseId) {
-        console.error("No baseId provided");
+        toast.error("No base ID provided");
+        navigate("/dashboard");
         return;
       }
 
       try {
         setIsLoadingData(true);
-        const baseData = await fetchBaseById(baseId);
-        console.log("Fetched base data:", baseData);
+        const response = await baseApi.getBaseById(Number(baseId));
+        const baseData = response.data;
 
-        // Update all form data including the image URL
         setFormData({
-          name: baseData.name || "",
-          link: baseData.link || "",
+          name: baseData.name,
+          link: baseData.link,
           image: null,
-          imageUrl: baseData.imageUrl || "",
+          imageUrl: baseData.imageUrl,
         });
 
-        // Set image preview from existing image URL
         if (baseData.imageUrl) {
           setImagePreview(baseData.imageUrl);
-          console.log("Set image preview:", baseData.imageUrl);
         }
       } catch (error) {
         console.error("Error fetching base:", error);
         toast.error("Failed to load base data");
-        navigate("/bases");
+        navigate("/dashboard");
       } finally {
         setIsLoadingData(false);
       }
@@ -98,7 +92,6 @@ const BaseUpdate = () => {
       setFormData((prev) => ({
         ...prev,
         image: file,
-        imageUrl: "", // Clear the old imageUrl when new image is selected
       }));
 
       const reader = new FileReader();
@@ -111,22 +104,13 @@ const BaseUpdate = () => {
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    console.log("Submitting form data:", formData);
 
     const submitData = new FormData();
     submitData.append("name", formData.name);
     submitData.append("link", formData.link);
-
-    // Only append image if a new one is selected
     if (formData.image) {
       submitData.append("image", formData.image);
     }
-
-    console.log("Submitting to API:", {
-      name: formData.name,
-      link: formData.link,
-      hasImage: !!formData.image,
-    });
 
     try {
       const success = await updateBase(submitData);
@@ -143,7 +127,8 @@ const BaseUpdate = () => {
   const handleDelete = async () => {
     const success = await deleteBase();
     if (success) {
-      navigate("/dashboard"); // Adjust this path as needed
+      toast.success("Base deleted successfully");
+      navigate("/dashboard");
     }
   };
 
@@ -213,9 +198,6 @@ const BaseUpdate = () => {
                       alt="Base preview"
                       className="object-contain rounded-lg w-full h-full"
                     />
-                    {formData.imageUrl && !formData.image && (
-                      <p className="text-sm text-muted-foreground mt-2 text-center"></p>
-                    )}
                   </div>
                 )}
               </div>

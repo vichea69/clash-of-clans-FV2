@@ -2,40 +2,25 @@ import { ChevronDown, Copy, Menu, X } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Avatar from "@radix-ui/react-avatar";
 import { useEffect, useState, useCallback, memo, useRef } from "react";
-import { fetchBases } from "@/api/baseApi";
-import { useAuth, useUser } from "@clerk/clerk-react";
+import { baseApi, Base as BaseType } from "@/api/baseApi";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 
-// Define proper interface based on BaseList.tsx
-interface Base {
-  id: number;
-  name: string;
-  imageUrl: string;
-  link: string;
-  createdAt?: string; // Add this field
-  updatedAt?: string; // Add this field
-  user: {
-    name: string;
-    avatar?: string;
-  };
-  clerkUserId?: string; // Add this field to track who uploaded with Clerk
-}
-
 // Extracted component for better code organization and performance
-const ComponentCard = memo(({ component }: { component: Base }) => {
-  const { user, isSignedIn } = useUser();
+const ComponentCard = memo(({ component }: { component: BaseType }) => {
+  const { user } = useAuth();
+
   const copyLink = useCallback(() => {
     navigator.clipboard.writeText(component.link || window.location.href);
-    // Show success toast with shorter duration on mobile
     toast.success("Link copied", {
       duration: 2000,
       position: window.innerWidth < 640 ? "top-center" : "bottom-right",
     });
   }, [component.link]);
 
-  // Only check for creator status if user is signed in
-  const isCreator = isSignedIn && user?.id === component.clerkUserId;
+  // Check if current user is the creator
+  const isCreator = user?.id === component.userId;
 
   return (
     <div className="group relative rounded-lg border overflow-hidden transition-all duration-200 hover:shadow-md">
@@ -88,10 +73,7 @@ const ComponentCard = memo(({ component }: { component: Base }) => {
                 {component.name}
               </span>
               <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
-                by{" "}
-                {isSignedIn && isCreator
-                  ? user?.username || user?.firstName || "You"
-                  : component.user?.name || "Unknown user"}
+                by {isCreator ? "You" : component.user?.name || "Unknown user"}
               </span>
               {component.createdAt && (
                 <span className="text-[10px] sm:text-xs text-muted-foreground truncate block">
@@ -106,8 +88,10 @@ const ComponentCard = memo(({ component }: { component: Base }) => {
   );
 });
 
-// Skeleton loader component for better UX during loading
-const SkeletonCard = () => (
+ComponentCard.displayName = "ComponentCard";
+
+// Skeleton loader component
+const SkeletonCard = memo(() => (
   <div className="rounded-lg border overflow-hidden animate-pulse">
     <div className="aspect-square bg-gray-200"></div>
     <div className="p-3 sm:p-4">
@@ -120,32 +104,44 @@ const SkeletonCard = () => (
       </div>
     </div>
   </div>
-);
+));
+
+SkeletonCard.displayName = "SkeletonCard";
+
+const sortOptions = [
+  { id: "latest", label: "Latest" },
+  { id: "recommended", label: "Recommended" },
+  { id: "popular", label: "Most Popular" },
+  { id: "trending", label: "Trending" },
+] as const;
+
+// Add type for sort option
+type SortOption = (typeof sortOptions)[number];
 
 const Base = () => {
-  const { isSignedIn } = useAuth();
-  const [components, setComponents] = useState<Base[]>([]);
+  const { isAuthenticated, user } = useAuth();
+  const [components, setComponents] = useState<BaseType[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const headerRef = useRef<HTMLDivElement>(null);
-  const [retryCount, setRetryCount] = useState(0);
+  // Update initial state with explicit type
+  const [activeSort, setActiveSort] = useState<SortOption>(sortOptions[0]);
 
-  // Load data using the fetchBases function directly
+  // Load data using the baseApi
   useEffect(() => {
     const loadBases = async () => {
       try {
         setLoading(true);
-        const basesData = await fetchBases();
-
-        if (Array.isArray(basesData)) {
-          setComponents(basesData);
-        } else {
-          setError(
-            "Expected an array of components but received a different format"
-          );
-          console.error("Unexpected data format:", basesData);
-        }
+        setError(null);
+        const response = await baseApi.getBases();
+        // Sort bases by createdAt in descending order (newest first)
+        const sortedBases = response.data.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime();
+          const dateB = new Date(b.createdAt || 0).getTime();
+          return dateB - dateA;
+        });
+        setComponents(sortedBases);
       } catch (err) {
         console.error("Error loading bases:", err);
         setError("Failed to load components. Please try again later.");
@@ -155,51 +151,84 @@ const Base = () => {
     };
 
     loadBases();
-  }, [retryCount]);
-
-  // Close mobile menu when clicking outside or when a link is clicked
-  const closeMobileMenu = useCallback(() => {
-    setMobileMenuOpen(false);
   }, []);
 
-  // Toggle mobile menu with improved touch handling
-  const toggleMobileMenu = useCallback(() => {
-    setMobileMenuOpen((prev) => !prev);
-  }, []);
+  const closeMobileMenu = useCallback(() => setMobileMenuOpen(false), []);
+  const toggleMobileMenu = useCallback(
+    () => setMobileMenuOpen((prev) => !prev),
+    []
+  );
 
-  // Menu items for the dropdown
-  const sortOptions = [
-    { id: "recommended", label: "Recommended" },
-    { id: "popular", label: "Most Popular" },
-    { id: "latest", label: "Latest" },
-    { id: "trending", label: "Trending" },
-  ];
+  const handleSortChange = useCallback(
+    (option: (typeof sortOptions)[number]) => {
+      setActiveSort(option);
 
-  const [activeSort, setActiveSort] = useState(sortOptions[0]);
+      // Sort components based on selected option
+      const sortedComponents = [...components].sort((a, b) => {
+        switch (option.id) {
+          case "latest":
+            // Sort by creation date (newest first)
+            return (
+              new Date(b.createdAt || 0).getTime() -
+              new Date(a.createdAt || 0).getTime()
+            );
+          case "popular":
+            // You can add popularity sorting logic here if you have a popularity metric
+            return 0;
+          case "trending":
+            // You can add trending sorting logic here if you have a trending metric
+            return 0;
+          default:
+            // Default to latest for "recommended" and fallback
+            return (
+              new Date(b.createdAt || 0).getTime() -
+              new Date(a.createdAt || 0).getTime()
+            );
+        }
+      });
 
-  const handleSortChange = useCallback((option: (typeof sortOptions)[0]) => {
-    setActiveSort(option);
-    // Here you would typically re-fetch or sort your data
-  }, []);
+      setComponents(sortedComponents);
+    },
+    [components]
+  );
 
-  // Handle retry with tracking retry count
+  // Update handleRetry to include sorting
   const handleRetry = useCallback(() => {
-    setRetryCount((count) => count + 1);
+    setLoading(true);
+    setError(null);
+    baseApi
+      .getBases()
+      .then((response) => {
+        const sortedBases = response.data.sort((a, b) => {
+          const dateA = new Date(a.createdAt || 0).getTime();
+          const dateB = new Date(b.createdAt || 0).getTime();
+          return dateB - dateA;
+        });
+        setComponents(sortedBases);
+      })
+      .catch((err) => {
+        console.error("Error retrying bases load:", err);
+        setError("Failed to load components. Please try again later.");
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  // Add touch event listener to close menu when tapping outside
+  // Close mobile menu on outside click
   useEffect(() => {
     if (!mobileMenuOpen) return;
 
-    const handleTouchOutside = (e: TouchEvent) => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       if (headerRef.current && !headerRef.current.contains(e.target as Node)) {
         setMobileMenuOpen(false);
       }
     };
 
-    document.addEventListener("touchstart", handleTouchOutside);
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
     return () => {
-      document.removeEventListener("touchstart", handleTouchOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
     };
   }, [mobileMenuOpen]);
 
@@ -330,9 +359,9 @@ const Base = () => {
       </header>
 
       <main className="container py-4 px-4 sm:px-6 sm:py-6">
-        {isSignedIn ? (
+        {isAuthenticated ? (
           <div className="mb-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-600">Welcome back!</p>
+            <p className="text-sm text-blue-600">Welcome back, {user?.name}!</p>
           </div>
         ) : (
           <div className="mb-6 p-4 bg-gray-50 rounded-lg">
@@ -343,10 +372,9 @@ const Base = () => {
           </div>
         )}
 
-        {/* Improved grid for mobile - single column on the smallest screens */}
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
-            {[...Array(4)].map((_, i) => (
+            {Array.from({ length: 8 }).map((_, i) => (
               <SkeletonCard key={i} />
             ))}
           </div>

@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { Link } from "react-router";
-import { Moon, Sun, Github, Menu, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router";
+import { Moon, Sun, Github, Menu, X, LogOut } from "lucide-react";
 import { useTheme } from "./theme-provider";
 import {
   DropdownMenu,
@@ -9,23 +9,28 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { useAuth, UserButton, useUser } from "@clerk/clerk-react";
-
+import { useAuth } from "@/context/AuthContext";
+import { RainbowButton } from "@/components/ui/rainbow-button";
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { setTheme } = useTheme();
-  const { isSignedIn } = useAuth();
-  const { user } = useUser();
+  const { user, signOut, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
   const navigation = [
     { title: "Home", path: "/" },
     { title: "Base Layouts", path: "/base" },
   ];
 
-  // Mobile UserButton click handler to prevent menu from closing
-  const handleUserButtonClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent event from bubbling up to parent elements
+  const handleLogout = async () => {
+    await signOut();
+    navigate("/");
   };
+
+  // Debug log to check auth state
+  useEffect(() => {
+    console.log("Auth state:", { user, isAuthenticated });
+  }, [user, isAuthenticated]);
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 dark:bg-background/80 dark:border-border/30">
@@ -67,10 +72,20 @@ const Header = () => {
                 {item.title}
               </Link>
             ))}
-            {isSignedIn && (
+            {isAuthenticated && (
               <>
-                <Link to="/dashboard">Dashboard</Link>
-                <Link to="/dashboard?showBaseUpload=true">Upload Base</Link>
+                <Link
+                  to="/dashboard"
+                  className="transition-colors hover:text-foreground/80 text-foreground/60 dark:text-foreground/70 dark:hover:text-foreground/90"
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/dashboard?showBaseUpload=true"
+                  className="flex items-center gap-2"
+                >
+                  <span className="font-medium">Upload Base</span>
+                </Link>
               </>
             )}
           </nav>
@@ -129,21 +144,31 @@ const Header = () => {
             </Link>
 
             <div className="flex items-center gap-4">
-              {isSignedIn ? (
-                <div className="flex items-center gap-2">
+              {isAuthenticated && user ? (
+                <div className="flex items-center gap-4">
                   <span className="text-sm font-medium">
-                    Hello, {user?.firstName || "User"}
+                    Hello, {user.name || "User"}
                   </span>
-                  <UserButton afterSignOutUrl="/" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleLogout}
+                    className="flex items-center gap-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </Button>
                 </div>
               ) : (
                 <>
-                  <Link to="/sign-in">Login</Link>
                   <Link
-                    to="/sign-up"
-                    className="text-sm font-medium bg-primary text-primary-foreground px-4 py-2 rounded-md"
+                    to="/sign-in"
+                    className="text-sm font-medium transition-colors hover:text-foreground/80"
                   >
-                    Sign Up
+                    Login
+                  </Link>
+                  <Link to="/sign-up">
+                    <RainbowButton>Sign Up</RainbowButton>
                   </Link>
                 </>
               )}
@@ -180,8 +205,7 @@ const Header = () => {
                 </Link>
               ))}
 
-              {/* Add Dashboard and Upload Base links in mobile menu when signed in */}
-              {isSignedIn && (
+              {isAuthenticated && user && (
                 <>
                   <Link
                     to="/dashboard"
@@ -192,7 +216,7 @@ const Header = () => {
                   </Link>
                   <Link
                     to="/dashboard?showBaseUpload=true"
-                    className="text-sm font-medium transition-colors hover:text-foreground/80 text-foreground/60 dark:text-foreground/70 dark:hover:text-foreground/90 flex items-center"
+                    className="flex items-center gap-2"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <span>Upload Base</span>
@@ -214,46 +238,41 @@ const Header = () => {
                   <span>GitHub</span>
                 </Link>
 
-                {/* Improved mobile auth section */}
-                {isSignedIn ? (
-                  <div className="mt-4 pt-4 border-t border-border/40 dark:border-border/30">
-                    <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col space-y-3 mt-4 pt-4 border-t border-border/40 dark:border-border/30">
+                  {isAuthenticated && user ? (
+                    <>
                       <span className="text-sm font-medium">
-                        Hello, {user?.firstName || "User"}
+                        Hello, {user.name || "User"}
                       </span>
-                      {/* Enhanced UserButton for mobile */}
-                      <div className="z-[999]" onClick={handleUserButtonClick}>
-                        <UserButton
-                          afterSignOutUrl="/"
-                          appearance={{
-                            elements: {
-                              userButtonAvatarBox: "w-10 h-10",
-                              userButtonTrigger: "focus:shadow-none",
-                              userButtonPopoverCard: "z-[999] shadow-lg",
-                            },
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col space-y-3 mt-4 pt-4 border-t border-border/40 dark:border-border/30">
-                    <Link
-                      to="/sign-in"
-                      className="inline-flex items-center justify-center w-full rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 dark:hover:bg-accent/40 dark:text-foreground/90"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Login
-                    </Link>
-                    <Link
-                      to="/sign-up"
-                      className="inline-flex items-center justify-center w-full rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 dark:bg-primary/90 dark:hover:bg-primary"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      Sign Up
-                    </Link>
-                  </div>
-                )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 justify-center"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Logout
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        to="/sign-in"
+                        className="inline-flex items-center justify-center w-full rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring hover:bg-accent hover:text-accent-foreground h-10 px-4 py-2 dark:hover:bg-accent/40 dark:text-foreground/90"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Login
+                      </Link>
+                      <Link
+                        to="/sign-up"
+                        className="inline-flex items-center justify-center w-full rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2 dark:bg-primary/90 dark:hover:bg-primary"
+                        onClick={() => setIsMenuOpen(false)}
+                      >
+                        Sign Up
+                      </Link>
+                    </>
+                  )}
+                </div>
               </div>
             </nav>
           </div>
