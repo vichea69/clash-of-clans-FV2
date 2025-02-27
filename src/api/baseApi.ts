@@ -75,7 +75,7 @@ export const baseApi = {
     if (data.link) formData.append('link', data.link);
     if (data.image) formData.append('image', data.image);
 
-    const response = await api.put<{ success: boolean; data: Base }>(`/bases/${id}`, formData, {
+    const response = await api.put<{ success: boolean; data: Base; message?: string }>(`/bases/${id}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

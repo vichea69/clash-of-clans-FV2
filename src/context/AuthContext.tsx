@@ -27,9 +27,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const initAuth = async () => {
       try {
         if (authApi.isAuthenticated()) {
-          const { user: currentUser } = await authApi.getCurrentUser();
-          setUser(currentUser);
-          localStorage.setItem("user", JSON.stringify(currentUser));
+          // Use stored user data if token is valid
+          const storedUser = localStorage.getItem("user");
+          if (storedUser) {
+            setUser(JSON.parse(storedUser));
+          }
         } else {
           // Clear stored data if token is invalid/expired
           setUser(null);
@@ -58,20 +60,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         throw new Error("No token received");
       }
 
-      // No need to store token here as it's already handled in authApi.signIn
-      // Just handle the user data
+      // Set user data from the sign in response
       if (response.user) {
         setUser(response.user);
         localStorage.setItem("user", JSON.stringify(response.user));
       } else {
-        try {
-          const { user: currentUser } = await authApi.getCurrentUser();
-          setUser(currentUser);
-          localStorage.setItem("user", JSON.stringify(currentUser));
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          throw new Error("Failed to fetch user data");
-        }
+        throw new Error("No user data received");
       }
     } catch (error) {
       console.error("Sign in error:", error);

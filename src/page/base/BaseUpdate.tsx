@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { useBaseActions } from "@/hooks/useBaseActions";
-import { baseApi, Base } from "@/api/baseApi";
+import { baseApi } from "@/api/baseApi";
 import { toast } from "sonner";
 import {
   AlertDialog,
