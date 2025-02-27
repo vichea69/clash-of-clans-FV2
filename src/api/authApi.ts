@@ -134,24 +134,7 @@ export const authApi = {
     },
 
     // Get current user
-    async getCurrentUser() {
-        try {
-            if (!this.isAuthenticated()) {
-                throw new Error('Not authenticated');
-            }
 
-            const response = await api.get<{ user: User; authMethod: string }>('/auth/me');
-            return response.data;
-        } catch (error) {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser && this.isAuthenticated()) {
-                return { user: JSON.parse(storedUser), authMethod: 'local' };
-            }
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            throw error;
-        }
-    },
 
     // Check if user is authenticated
     isAuthenticated() {
